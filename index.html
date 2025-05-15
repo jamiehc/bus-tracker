@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Bus Info</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .tab-btn.active {
+            background-color: #E0E7FF;
+            font-weight: bold;
+            color: #4F46E5;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-100 to-blue-200 min-h-screen flex items-center justify-center p-4 sm:p-8">
+    <div class="max-w-lg w-full bg-white p-4 sm:p-8 rounded-2xl shadow-lg space-y-4 sm:space-y-6">
+        <h1 class="text-2xl sm:text-3xl font-bold text-blue-800 mb-4 sm:mb-6 text-center border-b pb-2 sm:pb-4">Live Bus Information</h1>
+        <div class="text-center mb-4">
+            <button id="manualRefreshBtn" class="text-blue-600 text-2xl hover:text-blue-800">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+        <div id="refreshInfo" class="text-gray-600 text-sm mb-4 text-center"></div>
+        <div id="busInfo" class="space-y-4"></div>
+    </div>
+
+    <script>
+        // Constants
+        const REFRESH_INTERVAL = 30000;
+        const stopCategories = {
+            'From Home to Potters Bar': [
+                { id: '210021000520', name: 'Highview Gardens', lines: ['298', '313'] },
+            ],
+            'From Home to London': [
+                { id: '210021001540', name: 'Park Avenue', lines: ['298', '313'] },
+            ],
+            'From Potters Bar Station': [
+                { id: '210021000010', name: 'Potters Bar Station', lines: ['298', '313'] },
+                { id: '210021000020', name: 'Potters Bar Station', lines: ['298', '313'] }
+            ],
+            'From London': [
+                { id: '490000053A', name: 'Cockfosters Station', lines: ['298'] },
+                { id: '490000210G', name: 'Southgate Station', lines: ['298'] },
+                { id: '490000009W1', name: 'Arnos Grove Station', lines: ['298'] }
+            ],
+        };
+
+        let allArrivals = [];
+        let lastUpdatedTime = null;
+
+        // Initial Setup
+        document.addEventListener('DOMContentLoaded', () => {
+            renderCategories();
+            fetchAllStops();  
+            setInterval(fetchAllStops, REFRESH_INTERVAL);
+        });
+
+        // Render Tab Categories
+        function renderCategories() {
+            const container = document.getElementById('busInfo');
+            let tabsContainer = document.querySelector('.tabs');
+
+            if (!tabsContainer) {
+                tabsContainer = document.createElement('div');
+                tabsContainer.className = 'tabs flex overflow-x-auto mb-4 sm:mb-6 space-x-2 border-b pb-2';
+                container.before(tabsContainer);
+            }
+
+            tabsContainer.innerHTML = '';
+            Object.keys(stopCategories).forEach(category => {
+                const tabButton = document.createElement('button');
+                tabButton.className = 'tab-btn px-3 py-1 rounded-lg transition hover:bg-indigo-100 text-blue-600';
+                if (category === 'From Home to Potters Bar') {
+                    tabButton.classList.add('active');  // Set default active tab
+                }
+                tabButton.textContent = category;
+                tabButton.onclick = () => selectTab(category);
+
+                tabsContainer.appendChild(tabButton);
+            });
+
+            updateTabContent();
+        }
+
+        // Switch Tab
+        function selectTab(category) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent === category);
+            });
+            updateTabContent();
+            fetchAllStops();  // Fetch data immediately when a tab is selected
+        }
+
+        // Fetch Timetable Data
+        async function fetchTimetableData(stopId, line) {
+            const url = `https://api.tfl.gov.uk/Line/${line}/Timetable/${stopId}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Error fetching timetable: ${response.status}`);
+                const data = await response.json();
+                return data.timetable.routes;
+            } catch (error) {
+                console.error(`Error fetching timetable for line ${line} at stop ${stopId}:`, error.message);
+                return [];
+            }
+        }
+
+        // Render Arrivals and Timetable
+        async function renderArrivals() {
+            const activeTab = document.querySelector('.tab-btn.active')?.textContent || Object.keys(stopCategories)[0];
+            const stops = stopCategories[activeTab] || [];
+
+            const groupedArrivals = allArrivals
+                .sort((a, b) => a.timeToStation - b.timeToStation)
+                .reduce((acc, bus) => {
+                    if (!acc[bus.stopName]) acc[bus.stopName] = [];
+                    acc[bus.stopName].push(bus);
+                    return acc;
+                }, {});
+
+            for (const stop of stops) {
+                let stopSection = document.getElementById(`stop-${stop.name}`);
+                if (!stopSection) {
+                    stopSection = document.createElement('div');
+                    stopSection.id = `stop-${stop.name}`;
+                    stopSection.className = 'bg-white p-3 sm:p-4 rounded-lg shadow-md mb-2 sm:mb-3 transition hover:shadow-lg';
+                    stopSection.innerHTML = `<h3 class="font-bold text-blue-700 mb-2 text-lg">${stop.name}</h3>`;
+                    document.getElementById('busInfo').appendChild(stopSection);
+                }
+
+                let contentContainer = stopSection.querySelector('.arrivals');
+                if (contentContainer) {
+                    contentContainer.innerHTML = '';
+                } else {
+                    contentContainer = document.createElement('div');
+                    contentContainer.className = 'arrivals space-y-2';
+                    stopSection.appendChild(contentContainer);
+                }
+
+                const arrivals = groupedArrivals[stop.name] || [];
+                if (arrivals.length === 0) {
+                    contentContainer.innerHTML = `
+                        <div class="p-2 sm:p-3 mb-2 bg-gray-100 rounded-lg shadow-sm text-center text-gray-500">
+                            No arrival information
+                        </div>
+                    `;
+                } else {
+                    arrivals.forEach(bus => {
+                        const minutes = Math.round(bus.timeToStation / 60);
+                        const busInfo = `
+                            <div class="p-2 sm:p-3 mb-2 bg-indigo-50 rounded-lg shadow-sm transition hover:bg-indigo-100 flex justify-between items-center">
+                                <p class="font-semibold text-indigo-600 text-sm sm:text-base">${bus.lineId} - ${bus.destinationName}</p>
+                                <p class="text-gray-500 text-xs sm:text-sm">${minutes} min</p>
+                            </div>
+                        `;
+                        contentContainer.innerHTML += busInfo;
+                    });
+                }
+
+                // Timetable Section - Clear previous content to avoid duplicates
+                let timetableSection = stopSection.querySelector('.timetable-section');
+                if (!timetableSection) {
+                    timetableSection = document.createElement('div');
+                    timetableSection.className = 'timetable-section mt-2 pt-2 border-t border-gray-300';
+                    stopSection.appendChild(timetableSection);
+                } else {
+                    timetableSection.innerHTML = ''; // Clear previous content
+                }
+
+                timetableSection.innerHTML = `<h4 class="font-semibold text-indigo-600 mb-2">Next Timetabled Journeys:</h4>`;
+
+                for (const line of stop.lines) {
+                    const routes = await fetchTimetableData(stop.id, line);
+                    const today = new Date().getDay();
+                    const scheduleIndex = today === 0 ? 2 : today === 6 ? 1 : 0;
+                    const schedule = routes[scheduleIndex];
+
+                    if (schedule) {
+                        const journeysList = document.createElement('div');
+                        journeysList.className = 'max-h-32 overflow-y-auto';
+
+                        const now = new Date();
+                        // Gather all known journeys from all schedules into one array
+                        const allKnownJourneys = schedule.schedules.flatMap(s => s.knownJourneys);
+
+                        // Filter for upcoming journeys today only
+                        const upcomingJourneys = [];
+                        const seenTimes = new Set();
+                        for (const journey of allKnownJourneys) {
+                            const journeyTime = new Date();
+                            journeyTime.setHours(journey.hour, journey.minute, 0, 0);
+                            if (journeyTime >= now) {
+                                const timeKey = `${journey.hour}:${journey.minute}`;
+                                if (!seenTimes.has(timeKey)) {
+                                    upcomingJourneys.push(journey);
+                                    seenTimes.add(timeKey);
+                                }
+                                if (upcomingJourneys.length >= 3) break;
+                            }
+                        }
+
+                        if (upcomingJourneys.length === 0) {
+                            journeysList.innerHTML = `
+                                <div class="p-2 sm:p-3 mb-2 bg-gray-100 rounded-lg shadow-sm text-center text-gray-500">
+                                    No timetabled journeys available.
+                                </div>
+                            `;
+                        } else {
+                            upcomingJourneys.forEach(journey => {
+                                const timeStr = `${String(journey.hour).padStart(2, '0')}:${String(journey.minute).padStart(2, '0')}`;
+                                const busInfo = `
+                                    <div class="p-2 sm:p-3 mb-2 bg-indigo-50 rounded-lg shadow-sm transition hover:bg-indigo-100 flex justify-between items-center">
+                                        <p class="font-semibold text-indigo-600 text-sm sm:text-base">${line}</p>
+                                        <p class="text-gray-500 text-xs sm:text-sm">${timeStr}</p>
+                                    </div>
+                                `;
+                                journeysList.innerHTML += busInfo;
+                            });
+                        }
+
+                        timetableSection.appendChild(journeysList);
+                    }
+                }
+
+                stopSection.appendChild(timetableSection);
+            }
+        }
+
+        // Update Content for Active Tab
+        function updateTabContent() {
+            const container = document.getElementById('busInfo');
+            container.innerHTML = '';
+            renderArrivals();
+        }
+
+        // Update Refresh Info (Last Updated Time)
+        function updateRefreshInfo() {
+            const refreshInfo = document.getElementById('refreshInfo');
+            if (lastUpdatedTime) {
+                const formattedTime = lastUpdatedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                refreshInfo.textContent = `Last updated at: ${formattedTime}`;
+            } else {
+                refreshInfo.textContent = 'No data loaded yet.';
+            }
+        }
+
+        // Group Stops by Name
+        function groupStopsByName() {
+            const groupedStops = {};
+            Object.keys(stopCategories).forEach(category => {
+                stopCategories[category].forEach(stop => {
+                    if (!groupedStops[category]) {
+                        groupedStops[category] = [];
+                    }
+
+                    const existingStop = groupedStops[category].find(s => s.name === stop.name);
+                    if (existingStop) {
+                        existingStop.lines = [...new Set([...existingStop.lines, ...stop.lines])];
+                        existingStop.ids = [...new Set([...existingStop.ids, stop.id])];
+                    } else {
+                        groupedStops[category].push({ name: stop.name, lines: stop.lines, ids: [stop.id] });
+                    }
+                });
+            });
+
+            return groupedStops;
+        }
+
+        // Fetch All Stops and Update Arrivals
+        async function getBusInfo(stopIds, lines, category, stopName) {
+            const idsArray = Array.isArray(stopIds) ? stopIds : [stopIds];
+            console.log("Fetching data for stop IDs:", idsArray);
+
+            const stopPromises = idsArray.map(stopId => fetch(`https://api.tfl.gov.uk/StopPoint/${stopId}/Arrivals`));
+
+            try {
+                const responses = await Promise.all(stopPromises);
+                const dataSets = await Promise.all(responses.map(res => res.json()));
+
+                const combinedData = dataSets.flat();
+                displayBusInfo(combinedData, idsArray, lines, category, stopName);
+            } catch (error) {
+                console.error(`Error fetching data for stops ${stopIds}: ${error.message}`);
+            }
+        }
+
+        // Display Bus Info (Filtering and Accumulating)
+        function displayBusInfo(data, stopIds, lines, category, stopName) {
+            const filteredData = data
+                .filter(bus => lines.includes(bus.lineId) && bus.destinationName !== stopName)
+                .sort((a, b) => a.timeToStation - b.timeToStation);
+
+            accumulateArrivals(filteredData, stopName, category);
+        }
+
+        // Accumulate Arrivals and Render
+        function accumulateArrivals(data, stopName, category) {
+            const activeTab = document.querySelector('.tab-btn.active')?.textContent;
+            if (category !== activeTab) return;
+
+            data.forEach(bus => {
+                allArrivals.push({ ...bus, stopName });
+            });
+
+            renderArrivals();
+        }
+
+        // Manual Refresh Button Event
+        document.getElementById('manualRefreshBtn').addEventListener('click', () => fetchAllStops());
+
+        // Fetch All Stops and Render Information
+        function fetchAllStops() {
+            allArrivals.length = 0;
+            updateRefreshInfo();
+            const groupedStops = groupStopsByName();
+
+            Object.keys(groupedStops).forEach(category => {
+                groupedStops[category].forEach(stop => {
+                    getBusInfo(stop.ids, stop.lines, category, stop.name);
+                });
+            });
+
+            lastUpdatedTime = new Date();
+            updateRefreshInfo();
+            renderArrivals();
+        }
+    </script>
+</body>
+</html>
