@@ -94,22 +94,9 @@
             fetchAllStops();  // Fetch data immediately when a tab is selected
         }
 
-        // Fetch Timetable Data
-        async function fetchTimetableData(stopId, line) {
-            const url = `https://api.tfl.gov.uk/Line/${line}/Timetable/${stopId}`;
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`Error fetching timetable: ${response.status}`);
-                const data = await response.json();
-                return data.timetable.routes;
-            } catch (error) {
-                console.error(`Error fetching timetable for line ${line} at stop ${stopId}:`, error.message);
-                return [];
-            }
-        }
 
-        // Render Arrivals and Timetable
-        async function renderArrivals() {
+        // Render Arrivals (Live Arrivals Only)
+        function renderArrivals() {
             const activeTab = document.querySelector('.tab-btn.active')?.textContent || Object.keys(stopCategories)[0];
             const stops = stopCategories[activeTab] || [];
 
@@ -159,73 +146,6 @@
                         contentContainer.innerHTML += busInfo;
                     });
                 }
-
-                // Timetable Section - Clear previous content to avoid duplicates
-                let timetableSection = stopSection.querySelector('.timetable-section');
-                if (!timetableSection) {
-                    timetableSection = document.createElement('div');
-                    timetableSection.className = 'timetable-section mt-2 pt-2 border-t border-gray-300';
-                    stopSection.appendChild(timetableSection);
-                } else {
-                    timetableSection.innerHTML = ''; // Clear previous content
-                }
-
-                timetableSection.innerHTML = `<h4 class="font-semibold text-indigo-600 mb-2">Next Timetabled Journeys:</h4>`;
-
-                for (const line of stop.lines) {
-                    const routes = await fetchTimetableData(stop.id, line);
-                    const today = new Date().getDay();
-                    const scheduleIndex = today === 0 ? 2 : today === 6 ? 1 : 0;
-                    const schedule = routes[scheduleIndex];
-
-                    if (schedule) {
-                        const journeysList = document.createElement('div');
-                        journeysList.className = 'max-h-32 overflow-y-auto';
-
-                        const now = new Date();
-                        // Gather all known journeys from all schedules into one array
-                        const allKnownJourneys = schedule.schedules.flatMap(s => s.knownJourneys);
-
-                        // Filter for upcoming journeys today only
-                        const upcomingJourneys = [];
-                        const seenTimes = new Set();
-                        for (const journey of allKnownJourneys) {
-                            const journeyTime = new Date();
-                            journeyTime.setHours(journey.hour, journey.minute, 0, 0);
-                            if (journeyTime >= now) {
-                                const timeKey = `${journey.hour}:${journey.minute}`;
-                                if (!seenTimes.has(timeKey)) {
-                                    upcomingJourneys.push(journey);
-                                    seenTimes.add(timeKey);
-                                }
-                                if (upcomingJourneys.length >= 3) break;
-                            }
-                        }
-
-                        if (upcomingJourneys.length === 0) {
-                            journeysList.innerHTML = `
-                                <div class="p-2 sm:p-3 mb-2 bg-gray-100 rounded-lg shadow-sm text-center text-gray-500">
-                                    No timetabled journeys available.
-                                </div>
-                            `;
-                        } else {
-                            upcomingJourneys.forEach(journey => {
-                                const timeStr = `${String(journey.hour).padStart(2, '0')}:${String(journey.minute).padStart(2, '0')}`;
-                                const busInfo = `
-                                    <div class="p-2 sm:p-3 mb-2 bg-indigo-50 rounded-lg shadow-sm transition hover:bg-indigo-100 flex justify-between items-center">
-                                        <p class="font-semibold text-indigo-600 text-sm sm:text-base">${line}</p>
-                                        <p class="text-gray-500 text-xs sm:text-sm">${timeStr}</p>
-                                    </div>
-                                `;
-                                journeysList.innerHTML += busInfo;
-                            });
-                        }
-
-                        timetableSection.appendChild(journeysList);
-                    }
-                }
-
-                stopSection.appendChild(timetableSection);
             }
         }
 
