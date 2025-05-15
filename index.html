@@ -50,6 +50,12 @@
             renderCategories();
             fetchAllStops();  
             setInterval(fetchAllStops, REFRESH_INTERVAL);
+
+            // Fallback data fetch after 5 seconds
+            setTimeout(() => {
+                console.log("Fallback data fetch triggered after initial load.");
+                fetchAllStops();
+            }, 5000);
         });
 
         // Render Tab Categories
@@ -192,28 +198,43 @@
         }
 
         // Fetch All Stops and Update Arrivals
-        async function getBusInfo(stopIds, lines, category, stopName) {
+        async function getBusInfo(stopIds, lines, category, stopName, attempt = 1) {
             const idsArray = Array.isArray(stopIds) ? stopIds : [stopIds];
-            console.log("Fetching data for stop IDs:", idsArray);
+            console.log(`Fetching data for stop IDs: ${idsArray}, Attempt: ${attempt}`);
 
             const stopPromises = idsArray.map(stopId => fetch(`https://api.tfl.gov.uk/StopPoint/${stopId}/Arrivals`));
 
             try {
                 const responses = await Promise.all(stopPromises);
-                const dataSets = await Promise.all(responses.map(res => res.json()));
+                const dataSets = await Promise.all(responses.map(async (res) => {
+                    console.log(`Response Status for ${res.url}: ${res.status}`);
+                    if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+                    return res.json();
+                }));
 
                 const combinedData = dataSets.flat();
+                console.log(`Data received for stop ${stopName}:`, combinedData);
+
                 displayBusInfo(combinedData, idsArray, lines, category, stopName);
             } catch (error) {
-                console.error(`Error fetching data for stops ${stopIds}: ${error.message}`);
+                console.warn(`Error fetching data for ${stopName} (Attempt ${attempt}): ${error.message}`);
+
+                // Retry Logic with Exponential Backoff
+                if (attempt <= 3) {
+                    const delay = Math.pow(2, attempt) * 1000;
+                    console.log(`Retrying in ${delay / 1000} seconds...`);
+                    setTimeout(() => getBusInfo(stopIds, lines, category, stopName, attempt + 1), delay);
+                }
             }
         }
 
         // Display Bus Info (Filtering and Accumulating)
         function displayBusInfo(data, stopIds, lines, category, stopName) {
+            console.log(`Displaying data for stop: ${stopName}`);
             const filteredData = data
                 .filter(bus => lines.includes(bus.lineId) && bus.destinationName !== stopName)
                 .sort((a, b) => a.timeToStation - b.timeToStation);
+            console.log(`Filtered Data:`, filteredData);
 
             accumulateArrivals(filteredData, stopName, category);
         }
@@ -249,6 +270,13 @@
             updateRefreshInfo();
             renderArrivals();
         }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                console.log("Tab is now visible. Fetching data...");
+                fetchAllStops();
+            }
+        });
     </script>
 </body>
 </div>
