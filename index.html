@@ -16,14 +16,12 @@
     </style>
 </head>
 <body class="bg-gradient-to-br from-indigo-100 to-blue-200 min-h-screen flex flex-col items-center p-4 sm:p-8">
-    <div class="max-w-lg w-full bg-white p-4 sm:p-8 rounded-2xl shadow-lg space-y-4 sm:space-y-6">
-        <h1 class="text-2xl sm:text-3xl font-bold text-blue-800 mb-4 sm:mb-6 text-center border-b pb-2 sm:pb-4">Live Bus Information</h1>
-        <div class="text-center mb-4">
+    <div class="relative max-w-lg w-full bg-white p-4 sm:p-8 rounded-2xl shadow-lg space-y-4 sm:space-y-6">
+        <div class="absolute top-4 right-4">
             <button id="manualRefreshBtn" class="text-blue-600 text-2xl hover:text-blue-800">
                 <i class="fas fa-sync-alt"></i>
             </button>
         </div>
-        <div id="refreshInfo" class="text-gray-600 text-sm mb-4 text-center"></div>
         <div id="busInfo" class="space-y-4"></div>
     </div>
 
@@ -31,17 +29,13 @@
         // Constants
         const REFRESH_INTERVAL = 30000;
         const stopCategories = {
-            'From Home to Potters Bar': [
+            'From Home': [
                 { id: '210021000520', name: 'Highview Gardens', lines: ['298', '313'] },
-            ],
-            'From Home to London': [
                 { id: '210021001540', name: 'Park Avenue', lines: ['298', '313'] },
             ],
-            'From Potters Bar Station': [
+            'To Home': [
                 { id: '210021000010', name: 'Potters Bar Station', lines: ['298', '313'] },
-                { id: '210021000020', name: 'Potters Bar Station', lines: ['298', '313'] }
-            ],
-            'From London': [
+                { id: '210021000020', name: 'Potters Bar Station', lines: ['298', '313'] },
                 { id: '490000053A', name: 'Cockfosters Station', lines: ['298'] },
                 { id: '490000210G', name: 'Southgate Station', lines: ['298'] },
                 { id: '490000009W1', name: 'Arnos Grove Station', lines: ['298'] }
@@ -65,21 +59,29 @@
 
             if (!tabsContainer) {
                 tabsContainer = document.createElement('div');
-                tabsContainer.className = 'tabs flex overflow-x-auto mb-4 sm:mb-6 space-x-2 border-b pb-2';
+                tabsContainer.className = 'tabs flex justify-center space-x-4 mb-4 sm:mb-6 border-b pb-2';
                 container.before(tabsContainer);
             }
 
             tabsContainer.innerHTML = '';
-            Object.keys(stopCategories).forEach(category => {
+            Object.keys(stopCategories).forEach((category, index, array) => {
                 const tabButton = document.createElement('button');
-                tabButton.className = 'tab-btn px-3 py-1 rounded-lg transition hover:bg-indigo-100 text-blue-600';
+                tabButton.className = 'tab-btn px-3 py-1 rounded-lg transition hover:bg-indigo-100 text-blue-600 text-lg';
                 if (category === 'From Home to Potters Bar') {
-                    tabButton.classList.add('active');  // Set default active tab
+                    tabButton.classList.add('active');
                 }
                 tabButton.textContent = category;
                 tabButton.onclick = () => selectTab(category);
 
                 tabsContainer.appendChild(tabButton);
+
+                // Add divider except after the last tab
+                if (index < array.length - 1) {
+                    const divider = document.createElement('div');
+                    divider.className = 'w-px bg-gray-300 mx-2';
+                    divider.style.height = '24px';
+                    tabsContainer.appendChild(divider);
+                }
             });
 
             updateTabContent();
@@ -249,4 +251,6 @@
         }
     </script>
 </body>
+</div>
+<div id="refreshInfo" class="text-gray-600 text-sm mt-4 text-center"></div>
 </html>
