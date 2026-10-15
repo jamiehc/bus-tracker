@@ -3,13 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#dc2626">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BusTracker">
+    <link rel="manifest" href="./manifest.json">
     <title>Live Bus Tracker</title>
-    <!-- Tailwind CSS CDN -->
+    
+    <!-- Tailwind CSS -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         @keyframes pulse-subtle {
             0%, 100% { opacity: 1; }
@@ -23,31 +29,42 @@
         }
         .tab-btn {
             position: relative;
-            transition: all 0.2s ease-in-out;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .tab-btn.active {
             background-color: #ef4444;
             color: #ffffff;
-            box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3), 0 2px 4px -1px rgba(239, 68, 68, 0.06);
+            box-shadow: 0 4px 10px -2px rgba(239, 68, 68, 0.4);
         }
         .spin {
             animation: fa-spin 1s infinite linear;
         }
-        /* Custom scrollbar for bus lists */
+        /* Custom scrollbars */
         ::-webkit-scrollbar {
-            width: 4px;
+            width: 5px;
+            height: 5px;
         }
         ::-webkit-scrollbar-thumb {
             background: #cbd5e1;
-            border-radius: 4px;
+            border-radius: 9999px;
+        }
+        /* Modal animation */
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.96) translateY(8px);
+        }
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-slate-100 via-gray-100 to-red-50 text-gray-800 min-h-screen flex flex-col items-center p-3 sm:p-6 md:p-8 font-sans antialiased">
+<body class="bg-gradient-to-br from-slate-100 via-gray-100 to-red-50 text-gray-800 min-h-screen flex flex-col items-center p-3 sm:p-6 md:p-8 font-sans antialiased selection:bg-red-500 selection:text-white">
 
     <main class="w-full max-w-lg bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 flex flex-col transition-all">
         <!-- Top App Header -->
-        <header class="bg-gradient-to-r from-red-600 via-red-650 to-red-700 text-white p-5 pb-4 relative">
+        <header class="bg-gradient-to-r from-red-600 via-red-650 to-red-700 text-white p-4 sm:p-5 pb-4 relative select-none">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
                     <div class="w-10 h-10 rounded-xl bg-white bg-opacity-20 flex items-center justify-center text-white shadow-inner">
@@ -55,14 +72,17 @@
                     </div>
                     <div>
                         <h1 class="text-xl font-bold tracking-tight">Live Bus Tracker</h1>
-                        <p class="text-xs text-red-100 font-medium">Routes 298 &bull; 313</p>
+                        <p id="trackedLinesSubtitle" class="text-xs text-red-100 font-medium">Routes 298 &bull; 313</p>
                     </div>
                 </div>
 
-                <!-- Manual refresh button & status -->
+                <!-- Header Action Buttons -->
                 <div class="flex items-center space-x-2">
-                    <button id="manualRefreshBtn" title="Refresh departures" class="w-10 h-10 rounded-xl bg-white bg-opacity-15 hover:bg-opacity-25 active:scale-95 transition flex items-center justify-center text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50">
-                        <i id="refreshIcon" class="fas fa-sync-alt text-base"></i>
+                    <button id="openConfigBtn" title="Manage stops & directions" class="w-10 h-10 rounded-xl bg-white bg-opacity-15 hover:bg-opacity-25 active:scale-95 transition flex items-center justify-center text-white focus:outline-none focus:ring-2 focus:ring-white">
+                        <i class="fas fa-sliders-h text-sm"></i>
+                    </button>
+                    <button id="manualRefreshBtn" title="Refresh departures" class="w-10 h-10 rounded-xl bg-white bg-opacity-15 hover:bg-opacity-25 active:scale-95 transition flex items-center justify-center text-white focus:outline-none focus:ring-2 focus:ring-white">
+                        <i id="refreshIcon" class="fas fa-sync-alt text-sm"></i>
                     </button>
                 </div>
             </div>
@@ -81,9 +101,24 @@
             </div>
         </header>
 
+        <!-- Line Status / Service Alerts Banner (Visible when any line has issues) -->
+        <div id="lineStatusBanner" class="hidden bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-900 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <i class="fas fa-triangle-exclamation text-amber-600"></i>
+                <span id="lineStatusText" class="font-medium">Checking line status...</span>
+            </div>
+        </div>
+
         <!-- Segmented Tab Navigation -->
         <div class="p-4 sm:p-5 pb-2">
-            <div id="tabContainer" class="bg-gray-100 p-1.5 rounded-2xl flex space-x-1.5 border border-gray-200">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Direction / Journey</span>
+                <button id="addStopDirectBtn" class="text-xs font-semibold text-red-600 hover:text-red-700 flex items-center space-x-1 focus:outline-none">
+                    <i class="fas fa-plus-circle text-xs"></i>
+                    <span>Add Stop</span>
+                </button>
+            </div>
+            <div id="tabContainer" class="bg-gray-100 p-1.5 rounded-2xl flex space-x-1.5 border border-gray-200 overflow-x-auto">
                 <!-- Dynamically populated buttons -->
             </div>
         </div>
@@ -99,50 +134,233 @@
         <!-- Footnote / Quick Info -->
         <footer class="bg-gray-50 border-t border-gray-100 px-5 py-3 text-center text-xs text-gray-500 flex justify-between items-center">
             <span class="flex items-center">
-                <i class="fas fa-satellite-dish mr-1 text-red-500"></i> Auto-updates every 30s
+                <i class="fas fa-satellite-dish mr-1.5 text-red-500"></i> Updates every 30s
             </span>
             <span class="text-gray-400">Powered by TfL Open Data</span>
         </footer>
     </main>
 
-    <div id="offlineToast" class="fixed bottom-4 transform translate-y-20 opacity-0 transition-all duration-300 bg-gray-900 text-white text-xs px-4 py-2.5 rounded-full shadow-lg flex items-center space-x-2 pointer-events-none">
-        <i class="fas fa-exclamation-triangle text-amber-400"></i>
-        <span id="offlineToastMessage">Connection error. Retrying...</span>
+    <!-- TOAST NOTIFICATION -->
+    <div id="offlineToast" class="fixed bottom-5 transform translate-y-24 opacity-0 transition-all duration-300 bg-gray-900 text-white text-xs px-4 py-2.5 rounded-full shadow-2xl flex items-center space-x-2 z-50 pointer-events-none">
+        <i id="toastIcon" class="fas fa-check-circle text-emerald-400"></i>
+        <span id="offlineToastMessage">Settings saved</span>
     </div>
 
+    <!-- CONFIGURATION & STOP MANAGEMENT MODAL -->
+    <div id="configModal" class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-gray-100">
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center text-sm">
+                        <i class="fas fa-sliders-h"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-900 text-base">Customise Stops & Directions</h3>
+                        <p class="text-xs text-gray-500">Add or edit your stops, walking times, and tabs</p>
+                    </div>
+                </div>
+                <button id="closeConfigBtn" class="w-8 h-8 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition flex items-center justify-center">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Modal Content (Scrollable) -->
+            <div class="p-5 overflow-y-auto space-y-6 flex-1 text-sm">
+                <!-- Direction / Categories Section -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="font-bold text-gray-700 text-xs uppercase tracking-wider">Direction Tabs</label>
+                        <button id="addNewTabBtn" class="text-xs font-semibold text-red-600 hover:text-red-700">
+                            + New Direction
+                        </button>
+                    </div>
+                    <div id="modalTabsList" class="space-y-2">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <hr class="border-gray-100" />
+
+                <!-- Stops for Active Direction -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <label class="font-bold text-gray-700 text-xs uppercase tracking-wider block">
+                                Stops in <span id="modalActiveTabName" class="text-red-600">From Home</span>
+                            </label>
+                            <span class="text-[11px] text-gray-400">Order and manage your stops for this view</span>
+                        </div>
+                        <button id="openAddStopDrawerBtn" class="bg-red-600 hover:bg-red-700 text-white font-medium text-xs px-3 py-1.5 rounded-lg shadow-sm transition flex items-center space-x-1">
+                            <i class="fas fa-search text-[10px]"></i>
+                            <span>Search TfL Stop</span>
+                        </button>
+                    </div>
+
+                    <div id="modalStopsList" class="space-y-2.5">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <hr class="border-gray-100" />
+
+                <!-- Backup & Reset -->
+                <div class="bg-slate-50 p-4 rounded-2xl border border-gray-200 flex items-center justify-between">
+                    <div>
+                        <div class="font-semibold text-gray-700 text-xs">Reset to Defaults</div>
+                        <div class="text-[11px] text-gray-500">Restore the original Highview Gardens, Cockfosters & Potters Bar setup</div>
+                    </div>
+                    <button id="resetDefaultsBtn" class="text-xs font-medium text-red-600 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-xl transition">
+                        Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                <button id="saveConfigDoneBtn" class="bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-6 py-2 rounded-xl shadow transition">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STOP SEARCH & ADD / EDIT DRAWER MODAL -->
+    <div id="stopSearchModal" class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[88vh] flex flex-col overflow-hidden border border-gray-100">
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+                <h3 id="stopModalTitle" class="font-bold text-gray-900 text-sm">Add Bus Stop</h3>
+                <button id="closeStopSearchBtn" class="w-8 h-8 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition flex items-center justify-center">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="p-4 overflow-y-auto space-y-4 flex-1 text-xs">
+                <!-- Search Box for TfL -->
+                <div>
+                    <label class="block font-semibold text-gray-700 mb-1">Search TfL Bus Stops</label>
+                    <div class="flex space-x-2">
+                        <div class="relative flex-1">
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                            <input id="tflSearchInput" type="text" placeholder="e.g. Cockfosters, Potters Bar, Highview" class="w-full bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-500" />
+                        </div>
+                        <button id="tflSearchBtn" class="bg-gray-800 hover:bg-gray-900 text-white font-medium px-3 py-2 rounded-xl">
+                            Search
+                        </button>
+                    </div>
+                    <div id="tflSearchResults" class="mt-2 space-y-1.5 max-h-40 overflow-y-auto hidden"></div>
+                </div>
+
+                <div class="text-center text-gray-300 font-bold uppercase tracking-wider text-[10px]">— OR ENTER DETAILS MANUALLY —</div>
+
+                <!-- Form Fields -->
+                <div class="space-y-3">
+                    <div>
+                        <label class="block font-semibold text-gray-700 mb-1">Stop Name *</label>
+                        <input id="editStopName" type="text" placeholder="e.g. Highview Gardens" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-red-500" />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block font-semibold text-gray-700 mb-1">Subtitle / Direction</label>
+                            <input id="editStopSubtitle" type="text" placeholder="e.g. Towards Potters Bar" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-red-500" />
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-gray-700 mb-1">Walking Time (mins)</label>
+                            <input id="editStopWalkTime" type="number" min="0" max="60" placeholder="e.g. 3" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-red-500" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-gray-700 mb-1">TfL Stop Point ID (Naptan / SMS) *</label>
+                        <input id="editStopId" type="text" placeholder="e.g. 210021000520 or 490000053A" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono focus:ring-2 focus:ring-red-500" />
+                        <p class="text-[10px] text-gray-400 mt-0.5">Found from search above or official TfL stop URL.</p>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-gray-700 mb-1">Lines to Track (comma separated) *</label>
+                        <input id="editStopLines" type="text" placeholder="298, 313" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono uppercase focus:ring-2 focus:ring-red-500" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-end space-x-2">
+                <button id="cancelStopEditBtn" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-xs font-medium">Cancel</button>
+                <button id="saveStopEditBtn" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-5 py-2 rounded-xl text-xs shadow">Save Stop</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN JAVASCRIPT APPLICATION -->
     <script>
-        // Stop Configuration
-        const STOP_CATEGORIES = {
+        // Default Configuration
+        const DEFAULT_CATEGORIES = {
             'From Home': [
-                { id: '210021000520', name: 'Highview Gardens', subtitle: 'Towards Potters Bar', lines: ['298', '313'] },
-                { id: '210021001540', name: 'Park Avenue', subtitle: 'Towards London', lines: ['298', '313'] }
+                { id: '210021000520', name: 'Highview Gardens', subtitle: 'Towards Potters Bar', walkTime: 3, lines: ['298', '313'] },
+                { id: '210021001540', name: 'Park Avenue', subtitle: 'Towards London', walkTime: 4, lines: ['298', '313'] }
             ],
             'To Home': [
-                { id: '210021000010', name: 'Potters Bar Station', subtitle: 'Stop A / Forecourt', lines: ['298', '313'] },
-                { id: '210021000020', name: 'Potters Bar Station', subtitle: 'Stop B / Forecourt', lines: ['298', '313'] },
-                { id: '490000053A', name: 'Cockfosters Station', subtitle: 'Stop A', lines: ['298'] },
-                { id: '490000210G', name: 'Southgate Station', subtitle: 'Stop G', lines: ['298'] },
-                { id: '490000009W1', name: 'Arnos Grove Station', subtitle: 'Stop W1', lines: ['298'] }
+                { id: '210021000010', name: 'Potters Bar Station', subtitle: 'Stop A / Forecourt', walkTime: 1, lines: ['298', '313'] },
+                { id: '210021000020', name: 'Potters Bar Station', subtitle: 'Stop B / Forecourt', walkTime: 1, lines: ['298', '313'] },
+                { id: '490000053A', name: 'Cockfosters Station', subtitle: 'Stop A', walkTime: 2, lines: ['298'] },
+                { id: '490000210G', name: 'Southgate Station', subtitle: 'Stop G', walkTime: 2, lines: ['298'] },
+                { id: '490000009W1', name: 'Arnos Grove Station', subtitle: 'Stop W1', walkTime: 2, lines: ['298'] }
             ]
         };
 
+        const STORAGE_KEY = 'tfl_bus_tracker_config_v2';
         const REFRESH_INTERVAL_SEC = 30;
-        let currentTab = Object.keys(STOP_CATEGORIES)[0];
+
+        // State
+        let stopCategories = loadConfig();
+        let currentTab = Object.keys(stopCategories)[0] || 'From Home';
         let arrivalsData = {}; // keyed by stop.id
         let isRefreshing = false;
         let secondsRemaining = REFRESH_INTERVAL_SEC;
         let countdownTimer = null;
         let lastSuccessTime = null;
+        let editingStopIndex = null; // null if adding new, index if editing existing
 
-        // Initialize App
+        // Persistence Helpers
+        function loadConfig() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                        return parsed;
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not read config from localStorage, using defaults', e);
+            }
+            return JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+        }
+
+        function saveConfig() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(stopCategories));
+            } catch (e) {
+                console.error('Could not save config to localStorage', e);
+            }
+            updateHeaderSubtitle();
+        }
+
+        // App Initialization
         document.addEventListener('DOMContentLoaded', () => {
             setupTabs();
+            updateHeaderSubtitle();
             startRefreshTimer();
             refreshActiveStops();
+            checkLineStatuses();
 
+            // Setup listeners
             document.getElementById('manualRefreshBtn').addEventListener('click', () => {
                 resetCountdown();
                 refreshActiveStops();
+                checkLineStatuses();
             });
 
             document.addEventListener('visibilitychange', () => {
@@ -151,16 +369,64 @@
                     refreshActiveStops();
                 }
             });
+
+            // Modal Triggers
+            document.getElementById('openConfigBtn').addEventListener('click', openConfigModal);
+            document.getElementById('closeConfigBtn').addEventListener('click', closeConfigModal);
+            document.getElementById('saveConfigDoneBtn').addEventListener('click', () => {
+                closeConfigModal();
+                refreshActiveStops();
+            });
+
+            document.getElementById('addStopDirectBtn').addEventListener('click', () => {
+                openStopEditModal(null);
+            });
+
+            document.getElementById('openAddStopDrawerBtn').addEventListener('click', () => {
+                openStopEditModal(null);
+            });
+
+            document.getElementById('closeStopSearchBtn').addEventListener('click', closeStopEditModal);
+            document.getElementById('cancelStopEditBtn').addEventListener('click', closeStopEditModal);
+            document.getElementById('saveStopEditBtn').addEventListener('click', saveStopFromModal);
+
+            document.getElementById('addNewTabBtn').addEventListener('click', addNewTabPrompt);
+            document.getElementById('resetDefaultsBtn').addEventListener('click', resetToDefaults);
+
+            document.getElementById('tflSearchBtn').addEventListener('click', performTflSearch);
+            document.getElementById('tflSearchInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') performTflSearch();
+            });
         });
 
-        // Tab Setup
+        // Subtitle line summary
+        function updateHeaderSubtitle() {
+            const linesSet = new Set();
+            Object.values(stopCategories).forEach(stops => {
+                stops.forEach(s => (s.lines || []).forEach(l => linesSet.add(l)));
+            });
+            const linesArr = Array.from(linesSet).sort();
+            const subtitleEl = document.getElementById('trackedLinesSubtitle');
+            if (linesArr.length > 0) {
+                subtitleEl.innerHTML = `Routes ${linesArr.join(' &bull; ')}`;
+            } else {
+                subtitleEl.textContent = 'Custom Bus Tracker';
+            }
+        }
+
+        // Tab Rendering
         function setupTabs() {
             const tabContainer = document.getElementById('tabContainer');
             tabContainer.innerHTML = '';
 
-            Object.keys(STOP_CATEGORIES).forEach((category) => {
+            const categories = Object.keys(stopCategories);
+            if (!categories.includes(currentTab)) {
+                currentTab = categories[0] || 'From Home';
+            }
+
+            categories.forEach((category) => {
                 const btn = document.createElement('button');
-                btn.className = `tab-btn flex-1 py-2 px-3 text-xs sm:text-sm font-semibold rounded-xl transition ${
+                btn.className = `tab-btn flex-1 min-w-max py-2 px-3 text-xs sm:text-sm font-semibold rounded-xl transition ${
                     category === currentTab ? 'active' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
                 }`;
                 btn.textContent = category;
@@ -173,7 +439,6 @@
             if (currentTab === category) return;
             currentTab = category;
 
-            // Update tab UI
             const buttons = document.querySelectorAll('.tab-btn');
             buttons.forEach(btn => {
                 if (btn.textContent === category) {
@@ -185,12 +450,12 @@
                 }
             });
 
-            // Re-render UI immediately with existing cached state, then refresh current
             renderStopSections();
+            resetCountdown();
             refreshActiveStops();
         }
 
-        // Countdown & Auto Refresh
+        // Auto Refresh & Countdown
         function startRefreshTimer() {
             if (countdownTimer) clearInterval(countdownTimer);
             countdownTimer = setInterval(() => {
@@ -216,24 +481,7 @@
             }
         }
 
-        // Format arrival display
-        function formatMinutes(seconds) {
-            if (seconds < 45) return 'Due';
-            const mins = Math.round(seconds / 60);
-            return `${mins} min`;
-        }
-
-        function formatClockTime(isoString) {
-            if (!isoString) return '';
-            try {
-                const d = new Date(isoString);
-                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } catch {
-                return '';
-            }
-        }
-
-        // Fetch arrivals for active tab stops only (low latency + clean state)
+        // Live TfL API Refresh
         async function refreshActiveStops() {
             if (isRefreshing) return;
             isRefreshing = true;
@@ -241,19 +489,17 @@
             const refreshIcon = document.getElementById('refreshIcon');
             refreshIcon.classList.add('spin');
 
-            const stopsToFetch = STOP_CATEGORIES[currentTab] || [];
+            const stopsToFetch = stopCategories[currentTab] || [];
             let hadErrors = false;
 
-            // Fetch concurrently
             const fetchPromises = stopsToFetch.map(async (stop) => {
                 try {
                     const response = await fetch(`https://api.tfl.gov.uk/StopPoint/${stop.id}/Arrivals`);
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     const data = await response.json();
                     
-                    // Filter lines and sort by timeToStation
                     const filtered = data
-                        .filter(item => stop.lines.includes(item.lineId))
+                        .filter(item => (stop.lines || []).includes(item.lineId))
                         .sort((a, b) => a.timeToStation - b.timeToStation);
 
                     arrivalsData[stop.id] = {
@@ -276,12 +522,47 @@
             refreshIcon.classList.remove('spin');
             lastSuccessTime = new Date();
 
-            if (hadErrors) {
-                showToast('Some stops could not be updated');
+            if (hadErrors && stopsToFetch.length > 0) {
+                showToast('Some stops could not be updated', 'warn');
             }
 
             updateStatusHeader();
             renderStopSections();
+        }
+
+        // Check Line Disruptions (TfL Line Status API)
+        async function checkLineStatuses() {
+            const lines = new Set();
+            Object.values(stopCategories).forEach(stops => {
+                stops.forEach(s => (s.lines || []).forEach(l => lines.add(l)));
+            });
+            if (lines.size === 0) return;
+
+            try {
+                const lineQuery = Array.from(lines).join(',');
+                const res = await fetch(`https://api.tfl.gov.uk/Line/${lineQuery}/Status`);
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const disruptions = [];
+                data.forEach(line => {
+                    const badStatuses = (line.lineStatuses || []).filter(st => st.statusSeverity < 10);
+                    if (badStatuses.length > 0) {
+                        disruptions.push(`${line.name}: ${badStatuses[0].statusSeverityDescription}`);
+                    }
+                });
+
+                const banner = document.getElementById('lineStatusBanner');
+                const textEl = document.getElementById('lineStatusText');
+                if (disruptions.length > 0) {
+                    textEl.textContent = disruptions.join(' | ');
+                    banner.classList.remove('hidden');
+                } else {
+                    banner.classList.add('hidden');
+                }
+            } catch (e) {
+                console.warn('Could not verify line disruptions', e);
+            }
         }
 
         function updateStatusHeader() {
@@ -292,48 +573,60 @@
             }
         }
 
-        function showToast(msg) {
-            const toast = document.getElementById('offlineToast');
-            const messageEl = document.getElementById('offlineToastMessage');
-            messageEl.textContent = msg;
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            toast.classList.add('translate-y-0', 'opacity-100');
-
-            setTimeout(() => {
-                toast.classList.remove('translate-y-0', 'opacity-100');
-                toast.classList.add('translate-y-20', 'opacity-0');
-            }, 3000);
-        }
-
-        // Render Stop Sections
+        // Render Stop Cards
         function renderStopSections() {
             const container = document.getElementById('busInfo');
-            const stops = STOP_CATEGORIES[currentTab] || [];
+            const stops = stopCategories[currentTab] || [];
 
             if (stops.length === 0) {
-                container.innerHTML = `<div class="text-center py-8 text-gray-500 text-sm">No stops configured.</div>`;
+                container.innerHTML = `
+                    <div class="py-12 text-center bg-white rounded-2xl border border-gray-100 p-6 space-y-3">
+                        <div class="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto text-lg">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                        <h4 class="font-bold text-gray-800 text-sm">No stops in "${currentTab}"</h4>
+                        <p class="text-xs text-gray-400 max-w-xs mx-auto">Add a stop to start tracking departures in this direction.</p>
+                        <button onclick="openStopEditModal(null)" class="mt-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-sm transition">
+                            + Add Bus Stop
+                        </button>
+                    </div>
+                `;
                 return;
             }
 
             container.innerHTML = '';
 
-            stops.forEach(stop => {
+            stops.forEach((stop, index) => {
                 const stopResult = arrivalsData[stop.id];
                 const card = document.createElement('div');
                 card.className = 'bg-white rounded-2xl border border-gray-150 shadow-sm hover:shadow-md transition p-3.5 sm:p-4';
 
+                const walkMins = parseInt(stop.walkTime || 0, 10);
+
                 // Stop Header
                 let headerHtml = `
                     <div class="flex items-start justify-between mb-3 border-b border-gray-100 pb-2.5">
-                        <div>
-                            <h2 class="font-bold text-gray-900 text-sm sm:text-base flex items-center">
-                                <span class="w-2 h-2 rounded-full bg-red-600 inline-block mr-2"></span>
-                                ${stop.name}
-                            </h2>
-                            <p class="text-xs text-gray-500 font-medium pl-4">${stop.subtitle || 'Live departures'}</p>
+                        <div class="flex-1 pr-2">
+                            <div class="flex items-center space-x-1.5">
+                                <h2 class="font-bold text-gray-900 text-sm sm:text-base">
+                                    ${stop.name}
+                                </h2>
+                                <button onclick="openStopEditModal(${index})" title="Edit stop" class="text-gray-300 hover:text-gray-600 text-xs p-1">
+                                    <i class="fas fa-pen"></i>
+                                </button>
+                            </div>
+                            <div class="flex items-center space-x-2 mt-0.5">
+                                <span class="text-xs text-gray-500 font-medium">${stop.subtitle || 'Departures'}</span>
+                                ${walkMins > 0 ? `
+                                    <span class="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full flex items-center space-x-1" title="Walking time to stop">
+                                        <i class="fas fa-walking text-gray-400 text-[10px]"></i>
+                                        <span>${walkMins} min walk</span>
+                                    </span>
+                                ` : ''}
+                            </div>
                         </div>
                         <div class="flex space-x-1">
-                            ${stop.lines.map(line => `
+                            ${(stop.lines || []).map(line => `
                                 <span class="bg-gray-100 text-gray-600 border border-gray-200 text-[10px] font-bold px-1.5 py-0.5 rounded">
                                     ${line}
                                 </span>
@@ -353,9 +646,12 @@
                     `;
                 } else if (stopResult.error && stopResult.data.length === 0) {
                     contentHtml = `
-                        <div class="p-3 bg-red-50 text-red-700 rounded-xl text-xs flex items-center space-x-2">
-                            <i class="fas fa-exclamation-circle text-red-500"></i>
-                            <span>Unable to load arrivals for this stop</span>
+                        <div class="p-3 bg-red-50 text-red-700 rounded-xl text-xs flex items-center justify-between">
+                            <span class="flex items-center space-x-2">
+                                <i class="fas fa-exclamation-circle text-red-500"></i>
+                                <span>Unable to load arrivals</span>
+                            </span>
+                            <span class="text-[10px] font-mono text-red-400">ID: ${stop.id}</span>
                         </div>
                     `;
                 } else if (stopResult.data.length === 0) {
@@ -367,9 +663,24 @@
                     `;
                 } else {
                     const arrivalsHtml = stopResult.data.map((bus, idx) => {
+                        const totalMins = Math.round(bus.timeToStation / 60);
                         const isDue = bus.timeToStation < 60;
-                        const etaText = formatMinutes(bus.timeToStation);
+                        const etaText = isDue ? 'Due' : `${totalMins} min`;
                         const clockTime = formatClockTime(bus.expectedArrival);
+
+                        // Walking catchability logic:
+                        // If walkTime is set, can we make it in time?
+                        let catchBadge = '';
+                        if (walkMins > 0) {
+                            const buffer = totalMins - walkMins;
+                            if (buffer < 0) {
+                                catchBadge = `<span class="text-[10px] bg-red-100 text-red-700 font-bold px-1.5 py-0.5 rounded" title="Too late to walk">Missed</span>`;
+                            } else if (buffer <= 1) {
+                                catchBadge = `<span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded animate-pulse" title="Leave immediately">Leave Now!</span>`;
+                            } else {
+                                catchBadge = `<span class="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium">+${buffer}m leave</span>`;
+                            }
+                        }
 
                         return `
                             <div class="flex items-center justify-between p-2.5 rounded-xl ${
@@ -377,7 +688,7 @@
                             } hover:bg-red-50 transition border border-transparent hover:border-red-100">
                                 <div class="flex items-center space-x-3">
                                     <!-- London Red Bus Route Badge -->
-                                    <span class="bg-red-600 text-white font-extrabold text-xs px-2.5 py-1 rounded-md shadow-sm min-w-[42px] text-center tracking-tight">
+                                    <span class="bg-red-600 text-white font-black text-xs px-2.5 py-1 rounded-md shadow-sm min-w-[42px] text-center tracking-tight">
                                         ${bus.lineId}
                                     </span>
                                     <div>
@@ -391,16 +702,19 @@
                                         ` : ''}
                                     </div>
                                 </div>
-                                <div class="text-right">
-                                    <div class="inline-flex items-center px-2 py-0.5 rounded-md font-bold text-xs ${
-                                        isDue 
-                                            ? 'bg-amber-100 text-amber-800 animate-pulse' 
-                                            : 'bg-indigo-50 text-indigo-700'
-                                    }">
-                                        ${etaText}
+                                <div class="text-right flex flex-col items-end space-y-1">
+                                    <div class="flex items-center space-x-1.5">
+                                        ${catchBadge}
+                                        <div class="inline-flex items-center px-2 py-0.5 rounded-md font-bold text-xs ${
+                                            isDue 
+                                                ? 'bg-amber-100 text-amber-800 animate-pulse' 
+                                                : 'bg-indigo-50 text-indigo-700'
+                                        }">
+                                            ${etaText}
+                                        </div>
                                     </div>
                                     ${clockTime ? `
-                                        <div class="text-[10px] text-gray-400 font-mono mt-0.5">
+                                        <div class="text-[10px] text-gray-400 font-mono">
                                             ${clockTime}
                                         </div>
                                     ` : ''}
@@ -415,6 +729,321 @@
                 card.innerHTML = headerHtml + contentHtml;
                 container.appendChild(card);
             });
+        }
+
+        // Helpers
+        function formatClockTime(isoString) {
+            if (!isoString) return '';
+            try {
+                const d = new Date(isoString);
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch {
+                return '';
+            }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('offlineToast');
+            const messageEl = document.getElementById('offlineToastMessage');
+            const iconEl = document.getElementById('toastIcon');
+            messageEl.textContent = msg;
+
+            if (type === 'warn') {
+                iconEl.className = 'fas fa-exclamation-triangle text-amber-400';
+            } else {
+                iconEl.className = 'fas fa-check-circle text-emerald-400';
+            }
+
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3000);
+        }
+
+        // Configuration Modal Logic
+        function openConfigModal() {
+            renderModalTabs();
+            renderModalStops();
+            document.getElementById('configModal').classList.remove('hidden');
+        }
+
+        function closeConfigModal() {
+            document.getElementById('configModal').classList.add('hidden');
+            setupTabs();
+            renderStopSections();
+        }
+
+        function renderModalTabs() {
+            const container = document.getElementById('modalTabsList');
+            container.innerHTML = '';
+
+            const categories = Object.keys(stopCategories);
+            categories.forEach(cat => {
+                const row = document.createElement('div');
+                row.className = `flex items-center justify-between p-2.5 rounded-xl border ${
+                    cat === currentTab ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
+                }`;
+
+                row.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <span class="font-semibold text-gray-800 text-xs">${cat}</span>
+                        <span class="text-[10px] text-gray-400">(${(stopCategories[cat] || []).length} stops)</span>
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        ${cat !== currentTab ? `
+                            <button onclick="switchModalTab('${cat}')" class="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1">
+                                Select
+                            </button>
+                        ` : '<span class="text-[10px] text-red-600 font-bold px-2">Active</span>'}
+                        ${categories.length > 1 ? `
+                            <button onclick="deleteTab('${cat}')" class="text-xs text-red-500 hover:text-red-700 p-1">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+
+            document.getElementById('modalActiveTabName').textContent = currentTab;
+        }
+
+        window.switchModalTab = function(cat) {
+            currentTab = cat;
+            renderModalTabs();
+            renderModalStops();
+        };
+
+        window.deleteTab = function(cat) {
+            if (!confirm(`Delete direction "${cat}" and all its stops?`)) return;
+            delete stopCategories[cat];
+            const remaining = Object.keys(stopCategories);
+            currentTab = remaining[0];
+            saveConfig();
+            renderModalTabs();
+            renderModalStops();
+            setupTabs();
+            showToast(`Deleted direction "${cat}"`);
+        };
+
+        function addNewTabPrompt() {
+            const name = prompt('Enter name for new direction tab (e.g. "To Work", "Weekend"):');
+            if (!name || !name.trim()) return;
+            const clean = name.trim();
+            if (stopCategories[clean]) {
+                alert('A direction with this name already exists.');
+                return;
+            }
+            stopCategories[clean] = [];
+            currentTab = clean;
+            saveConfig();
+            renderModalTabs();
+            renderModalStops();
+            setupTabs();
+            showToast(`Created "${clean}"`);
+        }
+
+        function renderModalStops() {
+            const container = document.getElementById('modalStopsList');
+            const stops = stopCategories[currentTab] || [];
+            document.getElementById('modalActiveTabName').textContent = currentTab;
+            container.innerHTML = '';
+
+            if (stops.length === 0) {
+                container.innerHTML = `<div class="text-xs text-gray-400 italic py-2">No stops yet. Click "+ Search TfL Stop" to add one.</div>`;
+                return;
+            }
+
+            stops.forEach((stop, index) => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-2.5 bg-gray-50 border border-gray-200 rounded-xl';
+                item.innerHTML = `
+                    <div class="flex-1 pr-2">
+                        <div class="font-bold text-gray-800 text-xs">${stop.name}</div>
+                        <div class="text-[11px] text-gray-500">
+                            ${stop.subtitle || 'No subtitle'} &bull; ${(stop.lines || []).join(', ')} &bull; 
+                            <span class="text-gray-400 font-mono">${stop.id}</span>
+                            ${stop.walkTime ? ` &bull; <i class="fas fa-walking"></i> ${stop.walkTime}m` : ''}
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        <button onclick="moveStop(${index}, -1)" ${index === 0 ? 'disabled class="text-gray-200 p-1"' : 'class="text-gray-500 hover:text-gray-800 p-1"'}>
+                            <i class="fas fa-arrow-up text-xs"></i>
+                        </button>
+                        <button onclick="moveStop(${index}, 1)" ${index === stops.length - 1 ? 'disabled class="text-gray-200 p-1"' : 'class="text-gray-500 hover:text-gray-800 p-1"'}>
+                            <i class="fas fa-arrow-down text-xs"></i>
+                        </button>
+                        <button onclick="openStopEditModal(${index})" class="text-blue-600 hover:text-blue-800 p-1">
+                            <i class="fas fa-pen text-xs"></i>
+                        </button>
+                        <button onclick="deleteStop(${index})" class="text-red-500 hover:text-red-700 p-1">
+                            <i class="fas fa-trash-alt text-xs"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        window.moveStop = function(index, delta) {
+            const stops = stopCategories[currentTab];
+            const target = index + delta;
+            if (target < 0 || target >= stops.length) return;
+            const temp = stops[index];
+            stops[index] = stops[target];
+            stops[target] = temp;
+            saveConfig();
+            renderModalStops();
+        };
+
+        window.deleteStop = function(index) {
+            const stops = stopCategories[currentTab];
+            const stopName = stops[index].name;
+            if (!confirm(`Remove stop "${stopName}" from ${currentTab}?`)) return;
+            stops.splice(index, 1);
+            saveConfig();
+            renderModalStops();
+            renderStopSections();
+            showToast(`Removed "${stopName}"`);
+        };
+
+        function resetToDefaults() {
+            if (!confirm('Reset all stops and directions back to factory default? Any custom stops will be cleared.')) return;
+            stopCategories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+            currentTab = Object.keys(stopCategories)[0];
+            saveConfig();
+            renderModalTabs();
+            renderModalStops();
+            setupTabs();
+            renderStopSections();
+            refreshActiveStops();
+            showToast('Reset to defaults');
+        }
+
+        // Add/Edit Stop Sub-Modal Logic
+        window.openStopEditModal = function(index) {
+            editingStopIndex = index;
+            const isEdit = index !== null && index !== undefined;
+            document.getElementById('stopModalTitle').textContent = isEdit ? 'Edit Bus Stop' : `Add Stop to ${currentTab}`;
+
+            // Reset search state
+            document.getElementById('tflSearchInput').value = '';
+            document.getElementById('tflSearchResults').innerHTML = '';
+            document.getElementById('tflSearchResults').classList.add('hidden');
+
+            if (isEdit) {
+                const stop = stopCategories[currentTab][index];
+                document.getElementById('editStopName').value = stop.name || '';
+                document.getElementById('editStopSubtitle').value = stop.subtitle || '';
+                document.getElementById('editStopWalkTime').value = stop.walkTime || '';
+                document.getElementById('editStopId').value = stop.id || '';
+                document.getElementById('editStopLines').value = (stop.lines || []).join(', ');
+            } else {
+                document.getElementById('editStopName').value = '';
+                document.getElementById('editStopSubtitle').value = '';
+                document.getElementById('editStopWalkTime').value = '3';
+                document.getElementById('editStopId').value = '';
+                document.getElementById('editStopLines').value = '298, 313';
+            }
+
+            document.getElementById('stopSearchModal').classList.remove('hidden');
+        };
+
+        function closeStopEditModal() {
+            document.getElementById('stopSearchModal').classList.add('hidden');
+        }
+
+        function saveStopFromModal() {
+            const name = document.getElementById('editStopName').value.trim();
+            const subtitle = document.getElementById('editStopSubtitle').value.trim();
+            const walkTime = parseInt(document.getElementById('editStopWalkTime').value || '0', 10);
+            const id = document.getElementById('editStopId').value.trim();
+            const rawLines = document.getElementById('editStopLines').value;
+            const lines = rawLines.split(',').map(l => l.trim().toUpperCase()).filter(Boolean);
+
+            if (!name) {
+                alert('Please enter a stop name.');
+                return;
+            }
+            if (!id) {
+                alert('Please enter a valid TfL Stop ID (e.g. 490000053A).');
+                return;
+            }
+            if (lines.length === 0) {
+                alert('Please enter at least one bus route number (e.g. 298).');
+                return;
+            }
+
+            const stopObj = { id, name, subtitle, walkTime, lines };
+
+            if (!stopCategories[currentTab]) stopCategories[currentTab] = [];
+
+            if (editingStopIndex !== null) {
+                stopCategories[currentTab][editingStopIndex] = stopObj;
+            } else {
+                stopCategories[currentTab].push(stopObj);
+            }
+
+            saveConfig();
+            closeStopEditModal();
+            renderModalStops();
+            renderStopSections();
+            refreshActiveStops();
+            checkLineStatuses();
+            showToast(`Stop "${name}" saved!`);
+        }
+
+        // TfL StopPoint Search
+        async function performTflSearch() {
+            const query = document.getElementById('tflSearchInput').value.trim();
+            if (!query) return;
+
+            const resultsContainer = document.getElementById('tflSearchResults');
+            resultsContainer.innerHTML = `
+                <div class="py-2 text-center text-gray-400">
+                    <i class="fas fa-spinner spin mr-1 text-red-500"></i> Searching TfL...
+                </div>
+            `;
+            resultsContainer.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`https://api.tfl.gov.uk/StopPoint/Search/${encodeURIComponent(query)}?modes=bus`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const matches = data.matches || [];
+
+                if (matches.length === 0) {
+                    resultsContainer.innerHTML = `<div class="p-2 text-center text-gray-400">No stops found for "${query}"</div>`;
+                    return;
+                }
+
+                resultsContainer.innerHTML = '';
+                matches.slice(0, 8).forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'p-2 bg-gray-50 hover:bg-red-50 rounded-lg cursor-pointer border border-gray-100 flex items-center justify-between transition';
+                    row.innerHTML = `
+                        <div>
+                            <div class="font-bold text-gray-800 text-[11px]">${item.name}</div>
+                            <div class="text-[10px] text-gray-400">${item.towards ? `Towards ${item.towards} &bull; ` : ''}ID: ${item.id}</div>
+                        </div>
+                        <button type="button" class="text-[10px] bg-red-600 text-white font-semibold px-2 py-1 rounded">
+                            Select
+                        </button>
+                    `;
+                    row.onclick = () => {
+                        document.getElementById('editStopName').value = item.name.replace(' Bus Stop', '').replace(' / Station', ' Station');
+                        document.getElementById('editStopSubtitle').value = item.towards ? `Towards ${item.towards}` : '';
+                        document.getElementById('editStopId').value = item.id;
+                        resultsContainer.classList.add('hidden');
+                    };
+                    resultsContainer.appendChild(row);
+                });
+            } catch (err) {
+                resultsContainer.innerHTML = `<div class="p-2 text-center text-red-500">Error searching TfL API</div>`;
+            }
         }
     </script>
 </body>
