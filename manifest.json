@@ -1,0 +1,17 @@
+{
+  "name": "Live Bus Tracker",
+  "short_name": "BusTracker",
+  "description": "Live London bus departures with walking time catchability alerts and custom stops",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#dc2626",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='128' fill='%23dc2626'/><path fill='white' d='M400 192v144c0 14.1-9.2 26.1-22 30.2L378 394c0 14.3-11.7 26-26 26h-20c-14.3 0-26-11.7-26-26v-10H206v10c0 14.3-11.7 26-26 26h-20c-14.3 0-26-11.7-26-26l0-27.8C121.2 362.1 112 350.1 112 336V192c0-70.7 57.3-128 128-128h32c70.7 0 128 57.3 128 128zm-224 48c17.7 0 32-14.3 32-32s-14.3-32-32-32-32 14.3-32 32 14.3 32 32 32zm160 0c17.7 0 32-14.3 32-32s-14.3-32-32-32-32 14.3-32 32 14.3 32 32 32zm-208 80h256v-64H128v64z'/></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
